@@ -117,9 +117,10 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.context_edit) {
             // Chức năng: Sửa task
             ToDo taskToEdit = todos.get(position);
+
             Intent intent = new Intent(MainActivity.this, EditActivity.class);
             intent.putExtra(KEY_TODO_ITEM, taskToEdit);
-            intent.putExtra(KEY_TODO_POSITION, position);
+            intent.putExtra(EditActivity.KEY_TASK_INDEX, position);
             todoResultLauncher.launch(intent);
             return true;
         } else if (id == R.id.context_delete) {
@@ -191,27 +192,31 @@ public class MainActivity extends AppCompatActivity {
                 new ActivityResultCallback<ActivityResult>() {
                     @Override
                     public void onActivityResult(ActivityResult result) {
-                        if (result.getResultCode() == Activity.RESULT_OK) {
+                        if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                             Intent data = result.getData();
-                            if (data != null) {
-                                ToDo newOrUpdatedToDo = (ToDo) data.getSerializableExtra(KEY_TODO_ITEM);
-                                // Lấy vị trí: -1 nếu là Add, vị trí thực nếu là Edit
-                                int position = data.getIntExtra(KEY_TODO_POSITION, -1);
+                            ToDo todoItem = (ToDo) data.getSerializableExtra(KEY_TODO_ITEM);
 
-                                if (newOrUpdatedToDo != null) {
-                                    if (position == -1) {
-                                        // MODE: ADD NEW TASK
-                                        newOrUpdatedToDo.setOrder("#" + (todos.size() + 1));
-                                        todos.add(newOrUpdatedToDo);
-                                        Toast.makeText(MainActivity.this, "Đã thêm công việc mới!", Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        // MODE: EDIT EXISTING TASK
-                                        newOrUpdatedToDo.setSelected(todos.get(position).isSelected());
-                                        todos.set(position, newOrUpdatedToDo);
-                                        Toast.makeText(MainActivity.this, "Đã cập nhật công việc #" + (position + 1) + "!", Toast.LENGTH_SHORT).show();
+                            // Lấy vị trí Task được trả về (Chỉ có trong EditActivity)
+                            int taskIndex = data.getIntExtra(EditActivity.KEY_TASK_INDEX, -1);
+
+                            if (todoItem != null) {
+                                if (taskIndex != -1) {
+                                    // 1. TRƯỜNG HỢP CẬP NHẬT (EDIT)
+                                    // taskIndex có giá trị, thay thế đối tượng cũ bằng đối tượng mới
+                                    if (taskIndex >= 0 && taskIndex < todos.size()) {
+                                        // Giữ nguyên Order và cập nhật đối tượng
+                                        todoItem.setOrder("#" + (taskIndex + 1));
+                                        todos.set(taskIndex, todoItem);
+                                        Toast.makeText(MainActivity.this, "Đã cập nhật công việc!", Toast.LENGTH_SHORT).show();
                                     }
-                                    adapter.notifyDataSetChanged();
+                                } else {
+                                    // 2. TRƯỜNG HỢP THÊM MỚI (ADD)
+                                    // taskIndex là -1, thêm vào cuối danh sách
+                                    todoItem.setOrder("#" + (todos.size() + 1));
+                                    todos.add(todoItem);
+                                    Toast.makeText(MainActivity.this, "Đã thêm công việc mới!", Toast.LENGTH_SHORT).show();
                                 }
+                                adapter.notifyDataSetChanged();
                             }
                         }
                     }
@@ -219,141 +224,7 @@ public class MainActivity extends AppCompatActivity {
     }
 }
 
-class ToDoListAdapter extends ArrayAdapter<ToDo>{
-    int resource;
-    private SimpleDateFormat dateFormatter;
-    public ToDoListAdapter(Context context, int resource, List<ToDo> todos) {
-        super(context, resource, todos);
-        this.resource = resource;
-        // Khởi tạo SimpleDateFormat ở cấp độ class (tối ưu hóa hiệu suất)
-        this.dateFormatter = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-    }
-
-    @NonNull
-    @Override
-    public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
-        View v = convertView;
-        if (v == null){
-            LayoutInflater vi;
-            vi = LayoutInflater.from(this.getContext());
-            v = vi.inflate(this.resource,null);
-        }
-        ToDo t = getItem(position);
-
-        if (t!=null){
-            TextView orderTextView = (TextView) v.findViewById(R.id.order);
-            TextView titleTextView = (TextView) v.findViewById(R.id.title);
-            TextView deadlineTextView = (TextView) v.findViewById(R.id.deadline);
-            CheckBox cbSelect = v.findViewById(R.id.cbSelect);
-            RadioButton radioStatus = v.findViewById(R.id.radioStatus);
-            Date deadlineDate = t.getDeadline();
 
 
-            if(orderTextView!=null)
-                orderTextView.setText(t.getOrder());
-            if(titleTextView!=null)
-                titleTextView.setText(t.getTitle());
-            if (deadlineTextView!=null) {
-                String formattedDate = dateFormatter.format(deadlineDate);
-                deadlineTextView.setText(formattedDate);
-            }
 
-            // --- XỬ LÝ CHECKBOX SELECTION (ĐẦU DÒNG) ---
-            cbSelect.setOnCheckedChangeListener(null); // Reset listener
-            cbSelect.setChecked(t.isSelected());       // Gán state từ model
-            cbSelect.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                t.setSelected(isChecked); // Cập nhật model
-            });
-
-            // --- XỬ LÝ RADIO BUTTON STATUS (CUỐI DÒNG) ---
-            if (t.isChecked()) {
-                titleTextView.setPaintFlags(titleTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                titleTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.darker_gray));
-                deadlineTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.darker_gray));
-                radioStatus.setChecked(true);
-            } else {
-                titleTextView.setPaintFlags(titleTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
-                titleTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.black));
-                deadlineTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.black));
-                radioStatus.setChecked(false);
-            }
-
-            // Xử lý sự kiện click RadioButton
-            radioStatus.setOnClickListener(view -> {
-                boolean newState = !t.isChecked(); // Đảo ngược trạng thái hiện tại
-                t.setChecked(newState);
-
-                // Cập nhật lại UI ngay lập tức
-                radioStatus.setChecked(newState);
-                notifyDataSetChanged(); // Refresh lại list để cập nhật màu chữ/gạch ngang
-            });
-        }
-        return v;
-    }
-}
-
-class ToDo implements Serializable{
-    private String order;
-    private String title;
-    private String description;
-    private Date deadline;
-    private boolean isChecked;
-    private boolean isSelected;
-
-    // Constructor
-    public ToDo(String order, String title, String description, Date deadline, boolean isChecked){
-        this.order = order;
-        this.title = title;
-        this.description = description;
-        this.deadline = deadline;
-        this.isChecked = isChecked;
-        this.isSelected = false;
-    }
-
-    // Getters
-    public String getOrder() {
-        return order;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public Date getDeadline() {
-        return deadline;
-    }
-
-    public boolean isChecked() {
-        return isChecked;
-    }
-
-    public boolean isSelected() { return isSelected; }
-
-    // Setters
-    public void setOrder(String order){
-        this.order = order;
-    }
-
-    public void setTitle(String title){
-        this.title = title;
-    }
-
-    public void setDescription(String description){
-        this.description = description;
-    }
-
-    public void setDeadline(Date deadline){
-        this.deadline = deadline;
-    }
-
-    public void setChecked(boolean isChecked){
-        this.isChecked = isChecked;
-    }
-
-    public void setSelected(boolean selected) { isSelected = selected; }
-}
 

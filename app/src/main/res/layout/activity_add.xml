@@ -44,6 +44,40 @@
         android:drawableEnd="@android:drawable/ic_menu_today"
         android:layout_marginBottom="30dp"/>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="10dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Contact: "
+            android:textStyle="bold"/>
+
+        <!-- TextView hiển thị Contact đã chọn -->
+        <TextView
+            android:id="@+id/tvSelectedContact"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="None"
+            android:textColor="#000"
+            android:paddingStart="10dp"/>
+
+        <!-- Nút mũi tên để chọn -->
+        <ImageButton
+            android:id="@+id/btnSelectContact"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:src="@android:drawable/ic_media_play"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:rotation="0"/> <!-- Dùng icon play làm mũi tên hoặc icon arrow_right -->
+    </LinearLayout>
+
     <CheckBox
         android:id="@+id/cbStatus"
         android:layout_width="wrap_content"

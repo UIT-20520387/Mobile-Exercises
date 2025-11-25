@@ -1,15 +1,23 @@
 package com.example.listviewex;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.app.DatePickerDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.DatePicker;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
@@ -22,58 +30,78 @@ public class EditActivity extends AppCompatActivity {
     private EditText etTitle, etDescription, etDeadline;
     private CheckBox cbStatus;
     private Button btnEdit;
-    private Date selectedDeadline;
     private ToDo originalToDo;
     private int originalPosition;
+    private ImageButton btnSelectContact;
+    private TextView tvSelectedContact;
+
+    private ToDo currentToDo; // Đối tượng ToDo cũ
+    private int taskIndex; // Vị trí Task trong danh sách
+    private Date selectedDeadline;
+    private String currentContactInfo = "";
+
+    private ActivityResultLauncher<Intent> contactLauncher;
+
+    public static final String KEY_TASK_INDEX = "task_index";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add); // Sử dụng lại layout activity_add
 
-        // 1. Lấy dữ liệu task và vị trí
-        Intent intent = getIntent();
-        originalToDo = (ToDo) intent.getSerializableExtra(MainActivity.KEY_TODO_ITEM);
-        originalPosition = intent.getIntExtra(MainActivity.KEY_TODO_POSITION, -1);
-
-        if (originalToDo == null || originalPosition == -1) {
-            Toast.makeText(this, "Lỗi tải dữ liệu task.", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
-        // 2. Ánh xạ View
+        // Ánh xạ View
         etTitle = findViewById(R.id.etTitle);
         etDescription = findViewById(R.id.etDescription);
         etDeadline = findViewById(R.id.etDeadline);
         btnEdit = findViewById(R.id.btnSave); // Sử dụng lại ID btnSave
         cbStatus = findViewById(R.id.cbStatus);
+        tvSelectedContact = findViewById(R.id.tvSelectedContact);
+        btnSelectContact = findViewById(R.id.btnSelectContact);
 
-        // 3. Tải dữ liệu lên Form và cấu hình UI
-        loadTaskData(originalToDo);
+        cbStatus.setVisibility(View.VISIBLE);
+        // Đổi text button từ Save thành Edit
+        btnEdit.setText("EDIT");
 
-        // 4. Xử lý chọn ngày (DatePickerDialog)
+        // Nhận dữ liệu cũ từ MainActivity
+        Intent intent = getIntent();
+        currentToDo = (ToDo) intent.getSerializableExtra(MainActivity.KEY_TODO_ITEM);
+        taskIndex = intent.getIntExtra(KEY_TASK_INDEX, -1);
+
+        // Tải dữ liệu lên Form
+        loadOldData();
+
+        // Cấu hình Launcher và Event
+        setupContactLauncher();
+
+        // Xử lý chọn ngày (DatePickerDialog)
         etDeadline.setOnClickListener(v -> showDatePickerDialog());
 
-        // 5. Xử lý sự kiện Sửa (Edit)
+        // Xử lý sự kiện chọn Contact
+        btnSelectContact.setOnClickListener(v -> checkPermissionAndOpenContactList());
+
+        // Xử lý sự kiện Sửa (Edit)
         btnEdit.setOnClickListener(v -> handleEdit());
     }
 
     private void loadTaskData(ToDo task) {
-        etTitle.setText(task.getTitle());
-        etDescription.setText(task.getDescription());
+        if (currentToDo != null) {
+            etTitle.setText(currentToDo.getTitle());
+            etDescription.setText(currentToDo.getDescription());
+            cbStatus.setChecked(currentToDo.isChecked());
+            selectedDeadline = currentToDo.getDeadline();
 
-        // Hiện Checkbox Status và gán trạng thái
-        cbStatus.setVisibility(View.VISIBLE);
-        cbStatus.setChecked(task.isChecked());
-        cbStatus.setText("Done");
+            // Xử lý Contact Info
+            currentContactInfo = currentToDo.getContactInfo();
+            if (currentContactInfo != null && !currentContactInfo.isEmpty()) {
+                tvSelectedContact.setText(currentContactInfo);
+            } else {
+                tvSelectedContact.setText("None");
+            }
 
-        selectedDeadline = task.getDeadline();
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-        etDeadline.setText(sdf.format(selectedDeadline));
-
-        // Đổi text button từ Save thành Edit
-        btnEdit.setText("EDIT");
+            // Định dạng và hiển thị ngày tháng
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            etDeadline.setText(sdf.format(selectedDeadline));
+        }
     }
 
     private void showDatePickerDialog() {
@@ -96,6 +124,62 @@ public class EditActivity extends AppCompatActivity {
         datePickerDialog.show();
     }
 
+    private void loadOldData() {
+        if (currentToDo != null) {
+            etTitle.setText(currentToDo.getTitle());
+            etDescription.setText(currentToDo.getDescription());
+            cbStatus.setChecked(currentToDo.isChecked());
+            selectedDeadline = currentToDo.getDeadline();
+
+            // Xử lý Contact Info
+            currentContactInfo = currentToDo.getContactInfo();
+            if (currentContactInfo != null && !currentContactInfo.isEmpty()) {
+                tvSelectedContact.setText(currentContactInfo);
+            } else {
+                tvSelectedContact.setText("None");
+            }
+
+            // Định dạng và hiển thị ngày tháng
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            etDeadline.setText(sdf.format(selectedDeadline));
+        }
+    }
+
+    // --- LOGIC DANH BẠ (Giống hệt AddActivity) ---
+
+    private void setupContactLauncher() {
+        contactLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        // Lấy chuỗi "SĐT - Tên" được trả về
+                        String contact = result.getData().getStringExtra("SELECTED_CONTACT");
+                        currentContactInfo = contact; // Cập nhật biến lưu trữ
+                        tvSelectedContact.setText(contact); // Hiển thị lên UI
+                    }
+                }
+        );
+    }
+
+    private void checkPermissionAndOpenContactList() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_CONTACTS}, 100);
+        } else {
+            Intent intent = new Intent(EditActivity.this, ContactListActivity.class);
+            contactLauncher.launch(intent);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            Intent intent = new Intent(EditActivity.this, ContactListActivity.class);
+            contactLauncher.launch(intent);
+        }
+    }
+
     private void handleEdit() {
         String title = etTitle.getText().toString().trim();
         String description = etDescription.getText().toString().trim();
@@ -106,19 +190,21 @@ public class EditActivity extends AppCompatActivity {
             return;
         }
 
-        // 1. Tạo đối tượng ToDo Đã Cập Nhật
+        // Tạo đối tượng ToDo Đã Cập Nhật
         ToDo updatedToDo = new ToDo(
-                originalToDo.getOrder(), // Giữ nguyên Order (ví dụ: #1)
+                currentToDo.getOrder(), // Giữ nguyên Order (ví dụ: #1)
                 title,
                 description,
                 selectedDeadline,
-                isDone
+                isDone,
+                currentContactInfo
         );
 
         // 2. Gửi đối tượng đã cập nhật VÀ vị trí về MainActivity
         Intent resultIntent = new Intent();
         resultIntent.putExtra(MainActivity.KEY_TODO_ITEM, updatedToDo);
-        resultIntent.putExtra(MainActivity.KEY_TODO_POSITION, originalPosition); // Gửi vị trí
+        resultIntent.putExtra(KEY_TASK_INDEX, taskIndex);
+//        resultIntent.putExtra(MainActivity.KEY_TODO_POSITION, originalPosition); // Gửi vị trí
 
         setResult(RESULT_OK, resultIntent);
         finish();
