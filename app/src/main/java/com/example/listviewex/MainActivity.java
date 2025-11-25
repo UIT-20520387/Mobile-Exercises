@@ -14,18 +14,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.view.ContextMenu;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ListView;
+import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Date;
@@ -35,7 +41,6 @@ public class MainActivity extends AppCompatActivity {
     private List<ToDo> todos;
     private ToDoListAdapter adapter;
     private ListView list;
-    private Button addBtn;
 
     // Hằng số Keys cho việc truyền dữ liệu
     public static final String KEY_TODO_ITEM = "TODO_ITEM";
@@ -56,25 +61,128 @@ public class MainActivity extends AppCompatActivity {
         adapter = new ToDoListAdapter(this, R.layout.todo_list_item, todos);
         list.setAdapter(adapter);
 
-        addBtn = findViewById(R.id.addBtn);
-
+        registerForContextMenu(list);
         // Thiết lập Launcher
         setupToDoResultLauncher();
+    }
 
-        //Xử lý sự kiện click nút +
-        addBtn.setOnClickListener(v -> {
+    // --- 1. OPTION MENU (Góc trên bên phải) ---
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_options, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.menu_new) {
+            // Chức năng: Thêm mới (Thay thế nút + cũ)
             Intent intent = new Intent(MainActivity.this, AddActivity.class);
-            todoResultLauncher.launch(intent); // Khởi chạy Activity và chờ kết quả
-        });
+            todoResultLauncher.launch(intent);
+            return true;
+        } else if (id == R.id.menu_select_all) {
+            // Chức năng: Chọn tất cả Checkbox đầu dòng
+            selectAllTasks();
+            return true;
+        } else if (id == R.id.menu_delete) {
+            // Chức năng: Xóa các task đang được chọn
+            deleteSelectedTasks();
+            return true;
+        }
 
-        // Xử lý click Item (Sửa)
-        list.setOnItemClickListener((parent, view, position, id) -> {
+        return super.onOptionsItemSelected(item);
+    }
+
+    // --- CONTEXT MENU (Nhấn giữ item) ---
+
+    @Override
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        super.onCreateContextMenu(menu, v, menuInfo);
+        if (v.getId() == R.id.todoLV) {
+            getMenuInflater().inflate(R.menu.menu_context, menu);
+//            menu.setHeaderTitle("Chọn thao tác");
+        }
+    }
+
+    @Override
+    public boolean onContextItemSelected(@NonNull MenuItem item) {
+        // Lấy thông tin vị trí item được nhấn giữ
+        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) item.getMenuInfo();
+        int position = info.position;
+        int id = item.getItemId();
+
+        if (id == R.id.context_edit) {
+            // Chức năng: Sửa task
             ToDo taskToEdit = todos.get(position);
             Intent intent = new Intent(MainActivity.this, EditActivity.class);
             intent.putExtra(KEY_TODO_ITEM, taskToEdit);
-            intent.putExtra(KEY_TODO_POSITION, position); // Truyền vị trí để biết item nào cần cập nhật
+            intent.putExtra(KEY_TODO_POSITION, position);
             todoResultLauncher.launch(intent);
-        });
+            return true;
+        } else if (id == R.id.context_delete) {
+            // Chức năng: Xóa task này
+            deleteSingleTask(position);
+            return true;
+        }
+
+        return super.onContextItemSelected(item);
+    }
+
+    // --- CÁC HÀM XỬ LÝ LOGIC ---
+
+    private void selectAllTasks() {
+        // Kiểm tra xem có phải tất cả đang được chọn không để toggle (chọn hết / bỏ chọn hết)
+        boolean allSelected = true;
+        for (ToDo todo : todos) {
+            if (!todo.isSelected()) {
+                allSelected = false;
+                break;
+            }
+        }
+
+        // Nếu tất cả đã chọn -> Bỏ chọn hết. Ngược lại -> Chọn hết.
+        boolean targetState = !allSelected;
+        for (ToDo todo : todos) {
+            todo.setSelected(targetState);
+        }
+        adapter.notifyDataSetChanged();
+    }
+
+    private void deleteSelectedTasks() {
+        // Sử dụng Iterator để xóa an toàn trong khi duyệt danh sách
+        Iterator<ToDo> iterator = todos.iterator();
+        boolean hasDeleted = false;
+        while (iterator.hasNext()) {
+            ToDo todo = iterator.next();
+            if (todo.isSelected()) {
+                iterator.remove();
+                hasDeleted = true;
+            }
+        }
+
+        if (hasDeleted) {
+            updateOrderNumbers(); // Cập nhật lại số thứ tự #1, #2...
+            adapter.notifyDataSetChanged();
+            Toast.makeText(this, "Đã xóa các mục đã chọn.", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Chưa chọn mục nào để xóa.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void deleteSingleTask(int position) {
+        todos.remove(position);
+        updateOrderNumbers();
+        adapter.notifyDataSetChanged();
+        Toast.makeText(this, "Đã xóa công việc.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateOrderNumbers() {
+        for (int i = 0; i < todos.size(); i++) {
+            todos.get(i).setOrder("#" + (i + 1));
+        }
     }
 
     private void setupToDoResultLauncher() {
@@ -98,6 +206,7 @@ public class MainActivity extends AppCompatActivity {
                                         Toast.makeText(MainActivity.this, "Đã thêm công việc mới!", Toast.LENGTH_SHORT).show();
                                     } else {
                                         // MODE: EDIT EXISTING TASK
+                                        newOrUpdatedToDo.setSelected(todos.get(position).isSelected());
                                         todos.set(position, newOrUpdatedToDo);
                                         Toast.makeText(MainActivity.this, "Đã cập nhật công việc #" + (position + 1) + "!", Toast.LENGTH_SHORT).show();
                                     }
@@ -135,8 +244,8 @@ class ToDoListAdapter extends ArrayAdapter<ToDo>{
             TextView orderTextView = (TextView) v.findViewById(R.id.order);
             TextView titleTextView = (TextView) v.findViewById(R.id.title);
             TextView deadlineTextView = (TextView) v.findViewById(R.id.deadline);
-            CheckBox isCheckedTextView = (CheckBox) v.findViewById(R.id.checkboxCompleted);
-
+            CheckBox cbSelect = v.findViewById(R.id.cbSelect);
+            RadioButton radioStatus = v.findViewById(R.id.radioStatus);
             Date deadlineDate = t.getDeadline();
 
 
@@ -149,29 +258,34 @@ class ToDoListAdapter extends ArrayAdapter<ToDo>{
                 deadlineTextView.setText(formattedDate);
             }
 
-            // Ngắt kết nối listener cũ trước (tránh lỗi lặp lại sự kiện do tái chế view)
-            isCheckedTextView.setOnCheckedChangeListener(null);
+            // --- XỬ LÝ CHECKBOX SELECTION (ĐẦU DÒNG) ---
+            cbSelect.setOnCheckedChangeListener(null); // Reset listener
+            cbSelect.setChecked(t.isSelected());       // Gán state từ model
+            cbSelect.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                t.setSelected(isChecked); // Cập nhật model
+            });
 
-            // Gán trạng thái hiện tại từ model (t.isChecked()) cho CheckBox
-            isCheckedTextView.setChecked(t.isChecked());
-
-            // Định dạng UI dựa trên trạng thái hiện tại (Đảm bảo đúng màu và gạch ngang)
+            // --- XỬ LÝ RADIO BUTTON STATUS (CUỐI DÒNG) ---
             if (t.isChecked()) {
                 titleTextView.setPaintFlags(titleTextView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
                 titleTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.darker_gray));
                 deadlineTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.darker_gray));
+                radioStatus.setChecked(true);
             } else {
                 titleTextView.setPaintFlags(titleTextView.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
                 titleTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.black));
                 deadlineTextView.setTextColor(ContextCompat.getColor(getContext(), android.R.color.black));
+                radioStatus.setChecked(false);
             }
 
-            // Gán listener mới
-            isCheckedTextView.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                // Chỉ cập nhật đối tượng ToDo hiện tại
-                t.setChecked(isChecked);
-                // Yêu cầu Adapter cập nhật lại giao diện (sẽ gọi getView cho các view hiển thị)
-                notifyDataSetChanged();
+            // Xử lý sự kiện click RadioButton
+            radioStatus.setOnClickListener(view -> {
+                boolean newState = !t.isChecked(); // Đảo ngược trạng thái hiện tại
+                t.setChecked(newState);
+
+                // Cập nhật lại UI ngay lập tức
+                radioStatus.setChecked(newState);
+                notifyDataSetChanged(); // Refresh lại list để cập nhật màu chữ/gạch ngang
             });
         }
         return v;
@@ -184,6 +298,7 @@ class ToDo implements Serializable{
     private String description;
     private Date deadline;
     private boolean isChecked;
+    private boolean isSelected;
 
     // Constructor
     public ToDo(String order, String title, String description, Date deadline, boolean isChecked){
@@ -192,6 +307,7 @@ class ToDo implements Serializable{
         this.description = description;
         this.deadline = deadline;
         this.isChecked = isChecked;
+        this.isSelected = false;
     }
 
     // Getters
@@ -215,6 +331,8 @@ class ToDo implements Serializable{
         return isChecked;
     }
 
+    public boolean isSelected() { return isSelected; }
+
     // Setters
     public void setOrder(String order){
         this.order = order;
@@ -235,5 +353,7 @@ class ToDo implements Serializable{
     public void setChecked(boolean isChecked){
         this.isChecked = isChecked;
     }
+
+    public void setSelected(boolean selected) { isSelected = selected; }
 }
 

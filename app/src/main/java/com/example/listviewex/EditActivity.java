@@ -66,14 +66,14 @@ public class EditActivity extends AppCompatActivity {
         // Hiện Checkbox Status và gán trạng thái
         cbStatus.setVisibility(View.VISIBLE);
         cbStatus.setChecked(task.isChecked());
-        cbStatus.setText("Hoàn thành (Done)");
+        cbStatus.setText("Done");
 
         selectedDeadline = task.getDeadline();
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
         etDeadline.setText(sdf.format(selectedDeadline));
 
         // Đổi text button từ Save thành Edit
-        btnEdit.setText("SỬA CÔNG VIỆC");
+        btnEdit.setText("EDIT");
     }
 
     private void showDatePickerDialog() {

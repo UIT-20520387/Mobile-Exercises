@@ -7,6 +7,14 @@
     android:padding="12dp"
     android:background="@android:color/white">
 
+    <CheckBox
+        android:id="@+id/cbSelect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:focusable="false"
+        android:focusableInTouchMode="false"/>
+
     <TextView
         android:id="@+id/order"
         android:layout_width="wrap_content"
@@ -36,11 +44,12 @@
         android:textColor="#2C3E50"
         android:textSize="18sp"
         android:textStyle="bold" />
-    <CheckBox
-        android:id="@+id/checkboxCompleted"
+    <RadioButton
+        android:id="@+id/radioStatus"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:focusable="false"
-        android:clickable="true"/>
+        android:focusableInTouchMode="false"/>
 
 </LinearLayout>

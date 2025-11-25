@@ -10,6 +10,7 @@
         android:id="@+id/title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="82dp"
         android:paddingTop="18dp"
         android:paddingBottom="18dp"
         android:background="#97edcd"
@@ -22,15 +23,5 @@
         android:id="@+id/todoLV"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
-    <Button
-        android:id="@+id/addBtn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="18dp"
-        android:layout_gravity="right"
-        android:textSize="18sp"
-        android:text="+"
-        android:backgroundTint="#97edcd"
-        android:textColor="#2C3E50" />
 
 </LinearLayout>

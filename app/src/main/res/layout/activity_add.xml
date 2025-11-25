@@ -12,7 +12,7 @@
         android:textSize="24sp"
         android:textStyle="bold"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="84dp"
         android:layout_marginBottom="20dp"/>
 
     <EditText
