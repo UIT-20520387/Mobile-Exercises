@@ -1,46 +1,33 @@
 package com.example.listviewex;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.core.content.ContextCompat;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Paint;
 import android.os.Bundle;
 import android.view.ContextMenu;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.ListView;
-import android.widget.RadioButton;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.Serializable;
-import java.text.SimpleDateFormat;
 import java.util.Iterator;
-import java.util.Locale;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private List<ToDo> todos;
     private ToDoListAdapter adapter;
     private ListView list;
+
+    private ToDoDAO todoDAO;
 
     // Hằng số Keys cho việc truyền dữ liệu
     public static final String KEY_TODO_ITEM = "TODO_ITEM";
@@ -54,14 +41,20 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Khởi tạo danh sách công việc RỖNG
-        todos = new ArrayList<ToDo>();
+        // Khởi tạo DAO (SQLite)
+        todoDAO = new ToDoDAO(this);
+
+        // Lấy dữ liệu từ DB thay vì tạo ArrayList rỗng
+        todos = todoDAO.getAll();
 
         list = (ListView) findViewById(R.id.todoLV);
-        adapter = new ToDoListAdapter(this, R.layout.todo_list_item, todos);
+
+        adapter = new ToDoListAdapter(this, R.layout.todo_list_item, todos, todoDAO);
+
         list.setAdapter(adapter);
 
         registerForContextMenu(list);
+
         // Thiết lập Launcher
         setupToDoResultLauncher();
     }
@@ -79,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == R.id.menu_new) {
-            // Chức năng: Thêm mới (Thay thế nút + cũ)
+            // Chức năng: Thêm mới
             Intent intent = new Intent(MainActivity.this, AddActivity.class);
             todoResultLauncher.launch(intent);
             return true;
@@ -103,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreateContextMenu(menu, v, menuInfo);
         if (v.getId() == R.id.todoLV) {
             getMenuInflater().inflate(R.menu.menu_context, menu);
-//            menu.setHeaderTitle("Chọn thao tác");
         }
     }
 
@@ -115,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         if (id == R.id.context_edit) {
-            // Chức năng: Sửa task
+            // Sửa task
             ToDo taskToEdit = todos.get(position);
 
             Intent intent = new Intent(MainActivity.this, EditActivity.class);
@@ -124,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
             todoResultLauncher.launch(intent);
             return true;
         } else if (id == R.id.context_delete) {
-            // Chức năng: Xóa task này
+            // Xóa task này
             deleteSingleTask(position);
             return true;
         }
@@ -135,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
     // --- CÁC HÀM XỬ LÝ LOGIC ---
 
     private void selectAllTasks() {
-        // Kiểm tra xem có phải tất cả đang được chọn không để toggle (chọn hết / bỏ chọn hết)
         boolean allSelected = true;
         for (ToDo todo : todos) {
             if (!todo.isSelected()) {
@@ -144,7 +135,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // Nếu tất cả đã chọn -> Bỏ chọn hết. Ngược lại -> Chọn hết.
         boolean targetState = !allSelected;
         for (ToDo todo : todos) {
             todo.setSelected(targetState);
@@ -159,13 +149,17 @@ public class MainActivity extends AppCompatActivity {
         while (iterator.hasNext()) {
             ToDo todo = iterator.next();
             if (todo.isSelected()) {
+                // Xóa trong DB trước
+                if (todo.getId() != -1) {
+                    todoDAO.delete(todo.getId());
+                }
                 iterator.remove();
                 hasDeleted = true;
             }
         }
 
         if (hasDeleted) {
-            updateOrderNumbers(); // Cập nhật lại số thứ tự #1, #2...
+            updateOrderNumbersAndPersist(); // Cập nhật lại order và lưu vào DB
             adapter.notifyDataSetChanged();
             Toast.makeText(this, "Đã xóa các mục đã chọn.", Toast.LENGTH_SHORT).show();
         } else {
@@ -174,15 +168,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void deleteSingleTask(int position) {
+        ToDo t = todos.get(position);
+        if (t.getId() != -1) {
+            todoDAO.delete(t.getId());
+        }
         todos.remove(position);
-        updateOrderNumbers();
+        updateOrderNumbersAndPersist();
         adapter.notifyDataSetChanged();
         Toast.makeText(this, "Đã xóa công việc.", Toast.LENGTH_SHORT).show();
     }
 
-    private void updateOrderNumbers() {
+    private void updateOrderNumbersAndPersist() {
         for (int i = 0; i < todos.size(); i++) {
-            todos.get(i).setOrder("#" + (i + 1));
+            ToDo t = todos.get(i);
+            String newOrder = "#" + (i + 1);
+            t.setOrder(newOrder);
+            // lưu orderIndex vào DB (ghi đè)
+            if (t.getId() != -1) {
+                // đảm bảo orderIndex lưu đúng số (bỏ ký tự '#')
+                try {
+                    // lưu orderIndex như số nguyên (1-based)
+                    t.setOrder(String.valueOf(i + 1)); // tạm set order thành "1","2",... để DAO dùng parse
+                    todoDAO.update(t);
+                    // Sau update, đưa lại format hiển thị "#n"
+                    t.setOrder("#" + (i + 1));
+                } catch (Exception e) {
+                    // nếu parse lỗi thì bỏ qua
+                }
+            }
         }
     }
 
@@ -201,30 +214,49 @@ public class MainActivity extends AppCompatActivity {
 
                             if (todoItem != null) {
                                 if (taskIndex != -1) {
-                                    // 1. TRƯỜNG HỢP CẬP NHẬT (EDIT)
-                                    // taskIndex có giá trị, thay thế đối tượng cũ bằng đối tượng mới
+                                    // TRƯỜNG HỢP CẬP NHẬT (EDIT)
                                     if (taskIndex >= 0 && taskIndex < todos.size()) {
-                                        // Giữ nguyên Order và cập nhật đối tượng
+                                        // Update vào DB
+                                        if (todoItem.getId() != -1) {
+                                            todoDAO.update(todoItem);
+                                        } else {
+                                            // nếu object không có id (cộp từ AddActivity mà bạn gửi back), insert và set id
+                                            long newId = todoDAO.insert(todoItem);
+                                            todoItem.setId((int)newId);
+                                        }
+                                        // Giữ nguyên Order hiển thị
                                         todoItem.setOrder("#" + (taskIndex + 1));
                                         todos.set(taskIndex, todoItem);
                                         Toast.makeText(MainActivity.this, "Đã cập nhật công việc!", Toast.LENGTH_SHORT).show();
                                     }
                                 } else {
-                                    // 2. TRƯỜNG HỢP THÊM MỚI (ADD)
-                                    // taskIndex là -1, thêm vào cuối danh sách
+                                    // TRƯỜNG HỢP THÊM MỚI (ADD)
+                                    // Insert vào DB và set id
+                                    long newId = todoDAO.insert(todoItem);
+                                    todoItem.setId((int)newId);
+
+                                    // đặt order để hiển thị
                                     todoItem.setOrder("#" + (todos.size() + 1));
                                     todos.add(todoItem);
                                     Toast.makeText(MainActivity.this, "Đã thêm công việc mới!", Toast.LENGTH_SHORT).show();
                                 }
                                 adapter.notifyDataSetChanged();
+                            } else {
+                                // fallback: nếu không có todoItem, reload từ DB
+                                reloadFromDB();
                             }
                         }
                     }
                 });
     }
+
+    private void reloadFromDB() {
+        todos.clear();
+        todos.addAll(todoDAO.getAll());
+        // convert orderIndex to display "#n"
+        for (int i = 0; i < todos.size(); i++) {
+            todos.get(i).setOrder("#" + (i + 1));
+        }
+        adapter.notifyDataSetChanged();
+    }
 }
-
-
-
-
-

@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 public class ToDo implements Serializable {
+    private int id;
     private String order;
     private String title;
     private String description;
@@ -13,7 +14,8 @@ public class ToDo implements Serializable {
     private String contactInfo;
 
     // Constructor
-    public ToDo(String order, String title, String description, Date deadline, boolean isChecked, String contactInfo){
+    public ToDo(int id, String order, String title, String description, Date deadline, boolean isChecked, String contactInfo){
+        this.id = id;
         this.order = order;
         this.title = title;
         this.description = description;
@@ -23,7 +25,14 @@ public class ToDo implements Serializable {
         this.contactInfo = contactInfo;
     }
 
+    // Constructor không có id (dùng khi thêm mới)
+    public ToDo(String order, String title, String description, Date deadline, boolean isChecked, String contactInfo) {
+        this(-1, order, title, description, deadline, isChecked, contactInfo);
+    }
+
     // Getters
+    public int getId() { return id;}
+
     public String getOrder() {
         return order;
     }
@@ -49,6 +58,8 @@ public class ToDo implements Serializable {
     public String getContactInfo() { return contactInfo; }
 
     // Setters
+    public void setId(int id) { this.id = id; }
+
     public void setOrder(String order){
         this.order = order;
     }

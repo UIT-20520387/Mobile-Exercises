@@ -22,12 +22,16 @@ import java.util.Locale;
 public class ToDoListAdapter extends ArrayAdapter<ToDo> {
     int resource;
     private SimpleDateFormat dateFormatter;
-    public ToDoListAdapter(Context context, int resource, List<ToDo> todos) {
+    private ToDoDAO dao;
+
+    public ToDoListAdapter(Context context, int resource, List<ToDo> todos, ToDoDAO dao) {
         super(context, resource, todos);
         this.resource = resource;
-        // Khởi tạo SimpleDateFormat ở cấp độ class (tối ưu hóa hiệu suất)
         this.dateFormatter = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+        this.dao = dao;
     }
+
+
 
     @NonNull
     @Override
@@ -80,12 +84,14 @@ public class ToDoListAdapter extends ArrayAdapter<ToDo> {
 
             // Xử lý sự kiện click RadioButton
             radioStatus.setOnClickListener(view -> {
-                boolean newState = !t.isChecked(); // Đảo ngược trạng thái hiện tại
+                boolean newState = !t.isChecked();
                 t.setChecked(newState);
 
-                // Cập nhật lại UI ngay lập tức
-                radioStatus.setChecked(newState);
-                notifyDataSetChanged(); // Refresh lại list để cập nhật màu chữ/gạch ngang
+                // persist ngay
+                if (t.getId() != -1) {
+                    dao.update(t);
+                }
+                notifyDataSetChanged();
             });
         }
         return v;
